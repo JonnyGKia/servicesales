@@ -25,6 +25,18 @@
 <meta name="apple-mobile-web-app-title" content="Drive Sales">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#04101A">
+<script>
+// Ask the sheet for the numbers right away, while the rest of the page is still loading.
+(function () {
+  window.__DATA_URL__ = window.__DATA_URL__ || 'https://script.google.com/macros/s/AKfycbxWKmy6De7DHqKt6o3Zs-3YpOuX-FOOKtEUWYfPz1Hj9-YXpBO959rtoUfVovUDpptF/exec';
+  var way = null;
+  try { way = localStorage.getItem('sds-way'); } catch (e) {}
+  if (way === 'tag' || !window.fetch) return;
+  window.__EARLY__ = fetch(window.__DATA_URL__ + '?data=1&t=' + Date.now(), { credentials: 'omit', redirect: 'follow', cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('The data feed answered ' + r.status); return r.json(); });
+  window.__EARLY__.catch(function () {});
+})();
+</script>
 <link rel="preconnect" href="https://script.google.com">
 <link rel="preconnect" href="https://script.googleusercontent.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1112,6 +1124,15 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       document.head.appendChild(s);
     });
   }
+  // Uses the early request on the first load, and remembers which way of reaching the feed works on this device
+  function getFeed() {
+    var early = window.__EARLY__; window.__EARLY__ = null;
+    var remember = function (w) { return function (d) { try { localStorage.setItem('sds-way', w); } catch (e) {} return d; }; };
+    var byFetch = function () { var pr = early || viaFetch(); early = null; return pr.then(remember('fetch')); };
+    var byTag = function () { return viaScriptTag().then(remember('tag')); };
+    var way = null; try { way = localStorage.getItem('sds-way'); } catch (e) {}
+    return way === 'tag' ? byTag().catch(byFetch) : byFetch().catch(byTag);
+  }
   var CACHE_KEY = 'sds-feed-v1';
   function saveLast(raw) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(raw)); } catch (e) {} }
   function readLast() { try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
@@ -1132,7 +1153,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       var cached = readLast();
       if (cached) { showedCached = true; render(cached); el('updated').textContent = 'Updating…'; }
     }
-    viaFetch().catch(function () { return viaScriptTag(); }).then(done, fail);
+    getFeed().then(done, fail);
   }
   el('refresh').addEventListener('click', load);
   setInterval(function () {
