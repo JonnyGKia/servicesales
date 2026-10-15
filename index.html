@@ -2,8 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mark Kia Service Drive Sales</title>
+<meta name="description" content="Live service drive deals, gross and tracking for Mark Kia, updated from the sales sheet.">
+<!-- Link preview when the page is texted or shared -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Mark Kia">
+<meta property="og:title" content="Service Drive Sales">
+<meta property="og:description" content="Live deals, gross and tracking, updated from the sales sheet.">
+<meta property="og:url" content="https://jonnygkia.github.io/servicesales/">
+<meta property="og:image" content="https://jonnygkia.github.io/servicesales/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Silver and gold bar chart beside a speedometer gauge">
+<meta name="twitter:card" content="summary_large_image">
+<!-- Home screen app -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Drive Sales">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#04101A">
 <link rel="preconnect" href="https://script.google.com">
 <link rel="preconnect" href="https://script.googleusercontent.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,7 +76,7 @@ body {
 .wrap {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
+  padding: max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(48px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   display: grid;
   gap: 18px;
 }
@@ -196,6 +217,19 @@ body {
 .foot-stat { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: var(--muted); font-size: 13px; }
 .foot-stat b { font-family: var(--font-display); font-size: 24px; color: var(--gold); font-weight: 600; }
 
+/* Best days */
+.wd { grid-template-columns: minmax(78px, 100px) minmax(0, 1fr) auto; }
+.wd .val { min-width: 128px; }
+@media (max-width: 760px) { .wd { grid-template-columns: 84px minmax(40px, 1fr) auto; gap: 10px; } .wd .val { min-width: 0; } .wd .val .dl { display: none; } }
+.wd.best .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold), var(--gold-hi)); box-shadow: 0 0 12px rgba(210, 188, 133, 0.45); }
+.wd.best .lab { color: var(--gold); font-weight: 700; }
+.cal { position: relative; }
+.cal svg { display: block; width: 100%; overflow: visible; }
+.cal rect.day { transition: opacity .15s; }
+.cal-legend { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+.cal-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.cal-legend span { margin: 0 4px; }
+
 /* Table */
 .tablebox { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -297,6 +331,20 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     </div>
     <div class="chart" id="c-run"></div>
   </article>
+
+  <section class="grid-2">
+    <article class="card rise" style="animation-delay:.42s">
+      <div class="card-head"><div><h3>Best days of the week</h3><p class="note">Average deals per day for each weekday, year to date. The busiest weekday is in gold.</p></div></div>
+      <div class="hbars" id="weekdays"></div>
+      <div class="foot-stat"><span id="wd-foot-label">Busiest weekday</span><b class="num" id="wd-best">&nbsp;</b></div>
+    </article>
+    <article class="card rise" style="animation-delay:.43s">
+      <div class="card-head"><div><h3>Daily calendar</h3><p class="note">Every day this year. Brighter gold means more deals. Tap or hover a day for its numbers.</p></div></div>
+      <div class="cal" id="cal"></div>
+      <div class="cal-legend" id="cal-legend"></div>
+      <div class="foot-stat"><span>Biggest day</span><b class="num" id="cal-best">&nbsp;</b></div>
+    </article>
+  </section>
 
   <section class="grid-2">
     <article class="card rise" style="animation-delay:.44s">
@@ -424,8 +472,22 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       run.push({ date: new Date(day), total: acc });
     }
 
+    // per-day totals and weekday averages, from the first deal month through today
+    var grossByDay = d3.rollup(deals, function (v) { return d3.sum(v, function (d) { return d.total; }); }, function (d) { return d.date; });
+    var wk = d3.range(7).map(function (i) { return { i: i, deals: 0, gross: 0, days: 0 }; });
+    run.forEach(function (r, idx) {
+      var k = d3.timeFormat('%Y-%m-%d')(r.date);
+      var w = (r.date.getDay() + 6) % 7;   // Monday = 0
+      wk[w].days += 1;
+      wk[w].deals += byDay.get(k) || 0;
+      wk[w].gross += grossByDay.get(k) || 0;
+      r.day = byDay.get(k) || 0;
+      r.dayGross = grossByDay.get(k) || 0;
+    });
+    wk.forEach(function (w) { w.perDay = w.days ? w.deals / w.days : 0; });
+
     return {
-      year: yr, today: today, months: months, cur: cur, prev: prev, sources: sources, advisors: advisors, run: run,
+      year: yr, today: today, months: months, cur: cur, prev: prev, sources: sources, advisors: advisors, run: run, weekdays: wk,
       best: d3.max(finals, function (x) { return x.deals; }) || 0,
       bestGross: d3.max(finals, function (x) { return x.gross; }) || 0,
       ytd: {
@@ -806,6 +868,94 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     setWidths(pairs);
   }
 
+  // ---------- Best days ----------
+  var WD = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  function weekdays(D) {
+    var box = el('weekdays'); box.innerHTML = '';
+    var max = d3.max(D.weekdays, function (w) { return w.perDay; }) || 1;
+    var best = D.weekdays.slice().sort(function (a, b) { return b.perDay - a.perDay || b.deals - a.deals; })[0];
+    var pairs = [];
+    D.weekdays.forEach(function (w, i) {
+      var row = document.createElement('div');
+      row.className = 'hbar wd' + (best && w.i === best.i && w.deals > 0 ? ' best' : '') + (first ? ' rise' : '');
+      row.style.animationDelay = (0.2 + i * 0.03) + 's';
+      var lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = WD[w.i];
+      var bar = document.createElement('div'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
+      var val = document.createElement('div'); val.className = 'val num';
+      var b = document.createElement('b'); val.appendChild(b);
+      var rest = document.createElement('span'); val.appendChild(rest);
+      row.appendChild(lab); row.appendChild(bar); row.appendChild(val); box.appendChild(row);
+      setNum(b, 'wd-' + w.i, w.perDay, d3.format('.1f'), 800);
+      rest.textContent = ' / day';
+      var dl = document.createElement('span'); dl.className = 'dl'; dl.textContent = ' · ' + fInt(w.deals) + ' deals'; val.appendChild(dl);
+      row.title = WD[w.i] + ': ' + fInt(w.deals) + ' deals over ' + w.days + ' ' + WD[w.i] + 's, ' + money(w.gross) + ' total gross';
+      pairs.push([fill, w.perDay / max * 100]);
+    });
+    setWidths(pairs);
+    el('wd-best').textContent = best && best.deals > 0 ? WD[best.i] : '—';
+  }
+
+  function calendar(D) {
+    var box = el('cal');
+    box.innerHTML = '';
+    var run = D.run;
+    if (!run.length) return;
+    var start = d3.timeMonday.floor(run[0].date);
+    var weeks = d3.timeMonday.count(start, run[run.length - 1].date) + 1;
+    var W = Math.max(260, box.clientWidth), left = 30, topPad = 20;
+    var step = Math.max(8, Math.min(26, Math.floor((W - left) / weeks)));
+    var gap = step >= 14 ? 3 : 2, cell = step - gap;
+    var H = topPad + step * 7;
+    var svg = d3.select(box).append('svg').attr('viewBox', '0 0 ' + W + ' ' + H);
+    var max = d3.max(run, function (r) { return r.day; }) || 1;
+    var color = d3.scaleLinear().domain([1, Math.max(2, max)]).range([P.goldDeep, P.goldHi]).interpolate(d3.interpolateRgb);
+    var fill = function (n) { return n > 0 ? color(n) : P.track; };
+
+    ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'].forEach(function (t, i) {
+      if (!t) return;
+      svg.append('text').attr('x', left - 6).attr('y', topPad + i * step + cell / 2).attr('dy', '0.35em').attr('text-anchor', 'end')
+        .attr('fill', P.muted).style('font-size', '11px').text(t);
+    });
+    var lastMonth = -1;
+    run.forEach(function (r) {
+      var col = d3.timeMonday.count(start, r.date);
+      if (r.date.getMonth() !== lastMonth && r.date.getDate() <= 7) {
+        lastMonth = r.date.getMonth();
+        svg.append('text').attr('x', left + col * step).attr('y', 12).attr('fill', r.date.getMonth() === D.today.getMonth() ? P.gold : P.muted)
+          .style('font-size', '11px').style('font-weight', 700).text(d3.timeFormat('%b')(r.date));
+      }
+    });
+
+    var tip = tipFor(box), anim = first && !reduce;
+    var isToday = function (d) { return +d === +D.today; };
+    run.forEach(function (r) {
+      var col = d3.timeMonday.count(start, r.date), row = (r.date.getDay() + 6) % 7;
+      var rect = svg.append('rect').attr('class', 'day')
+        .attr('x', left + col * step).attr('y', topPad + row * step).attr('width', cell).attr('height', cell)
+        .attr('rx', Math.min(4, cell / 4)).attr('fill', fill(r.day))
+        .attr('stroke', isToday(r.date) ? P.goal : r.day === max && max > 0 ? P.goldHi : 'none')
+        .attr('stroke-width', isToday(r.date) ? 1.5 : 1);
+      if (anim) rect.attr('opacity', 0).transition().delay(200 + col * 22).duration(300).attr('opacity', 1);
+      var show = function (e) {
+        tip.show(e, d3.timeFormat('%a, %b %-d')(r.date) + (isToday(r.date) ? ' · today' : ''), [
+          ['c', 'Deals', fInt(r.day)],
+          ['a', 'Total gross', r.day ? money(r.dayGross) : null]
+        ]);
+      };
+      rect.on('pointerenter', show).on('pointermove', show).on('pointerdown', show).on('pointerleave', function () { tip.hide(); });
+    });
+
+    var lg = el('cal-legend'); lg.innerHTML = '';
+    var add = function (tag, cls, bg) { var n = document.createElement(tag); if (bg) n.style.background = bg; if (cls) n.textContent = cls; lg.appendChild(n); };
+    add('span', 'Less');
+    [0].concat(d3.range(1, Math.max(2, max) + 1).filter(function (v, i, a) { return a.length <= 5 || i % Math.ceil(a.length / 4) === 0 || v === max; }))
+      .forEach(function (v) { add('i', null, fill(v)); });
+    add('span', 'More');
+
+    var top = run.reduce(function (a, r) { return r.day > a.day || (r.day === a.day && r.dayGross > a.dayGross) ? r : a; }, run[0]);
+    el('cal-best').textContent = top.day ? d3.timeFormat('%b %-d')(top.date) + ' · ' + fInt(top.day) + ' deal' + (top.day === 1 ? '' : 's') : '—';
+  }
+
   // ---------- Table ----------
   function table(D) {
     var tb = el('tbody'); tb.innerHTML = '';
@@ -921,6 +1071,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
 
     kpis(D);
     drawCharts();
+    weekdays(D);
     sources(D);
     board(D);
     table(D);
@@ -932,6 +1083,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     bars('c-deals', last.months, 'deals', 'pace_deals', 'goal_deals', fInt, fInt);
     bars('c-gross', last.months, 'gross', 'pace_gross', 'goal_gross', money, moneyShort);
     running(last);
+    calendar(last);
   }
 
   // ---------- Loading ----------
@@ -991,6 +1143,12 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
   }, 1000);
   var rt;
   window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawCharts, 200); });
+  // Coming back to the page (or the home screen app) after a while pulls fresh numbers
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 60000) load();
+  });
   load();
 })();
 </script>
