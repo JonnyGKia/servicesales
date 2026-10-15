@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mark Kia Service Drive Sales</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -174,7 +176,7 @@ body {
 .hbar { display: grid; grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) 132px; gap: 12px; align-items: center; font-size: 13.5px; }
 .hbar .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hbar .bar { height: 12px; border-radius: 999px; background: rgba(199, 200, 202, 0.1); overflow: hidden; }
-.hbar .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--silver-deep), var(--silver)); transition: width 1.2s var(--ease); }
+.hbar .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--silver-deep), var(--silver)); transition: width .8s var(--ease); }
 .hbar.adv .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold), var(--gold-hi)); box-shadow: 0 0 12px rgba(210, 188, 133, 0.45); }
 .hbar .val { color: var(--muted); text-align: right; white-space: nowrap; }
 .hbar .val b { color: var(--fg); font-family: var(--font-display); font-size: 18px; font-weight: 600; }
@@ -215,14 +217,14 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
 /* Motion */
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: no-preference) {
-  .rise { animation: rise .8s var(--ease) both; }
+  .rise { animation: rise .5s var(--ease) both; }
   .month-name { animation: sheen 3.2s 0.3s var(--ease) both; }
   .brand .mk { animation: sheen 3.2s 0.1s var(--ease) both; }
   .live i { animation: pulse 2s ease-out infinite; }
   .rail i::after { animation: shine 3s 1.4s ease-in-out infinite; }
   .bump { animation: bump 1.2s var(--ease); }
   .march { animation: march 1.2s linear infinite; }
-  .chip { animation: pop .6s 1.6s var(--ease) both; }
+  .chip { animation: pop .5s .8s var(--ease) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   @keyframes sheen { from { background-position: 100% 0; } to { background-position: 0 0; } }
   @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(141, 178, 85, 0.6); } 70% { box-shadow: 0 0 0 9px rgba(141, 178, 85, 0); } 100% { box-shadow: 0 0 0 0 rgba(141, 178, 85, 0); } }
@@ -318,7 +320,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     </div>
   </article>
 
-  <footer>Mark Kia · Scottsdale, Arizona<br> Refreshes every 5 minutes.</footer>
+  <footer>Mark Kia · Scottsdale, Arizona</footer>
 </div>
 
 <script>
@@ -444,7 +446,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     if (reduce || (from != null && Math.abs(from - value) < 1e-9)) { node.textContent = fmt(value); return; }
     var start = from == null ? 0 : from;
     if (from != null) { node.classList.remove('bump'); void node.offsetWidth; node.classList.add('bump'); }
-    d3.select(node).transition().duration(dur || 1400).ease(d3.easeCubicOut)
+    d3.select(node).transition().duration(dur || 900).ease(d3.easeCubicOut)
       .tween('text', function () {
         var i = d3.interpolateNumber(start, value);
         return function (t) { node.textContent = fmt(t === 1 ? value : i(t)); };
@@ -522,7 +524,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       needle.attr('transform', 'rotate(' + (ang(v) * 180 / Math.PI) + ')');
       big.text(o.fmt(t >= 1 ? (o.value || 0) : Math.max(0, v)));
     };
-    var dur = reduce ? 0 : first ? 2000 : 900;
+    var dur = reduce ? 0 : first ? 1200 : 700;
     if (!dur) { draw(o.value || 0, o.actual || 0, 1); return; }
     svg.transition('g').duration(dur).ease(first ? d3.easeBackOut.overshoot(1.15) : d3.easeCubicOut).tween('gauge', function () {
       var iv = d3.interpolateNumber(fromV, o.value || 0), ia = d3.interpolateNumber(fromA, o.actual || 0);
@@ -548,7 +550,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     svg.append('circle').attr('cx', x(lp.i)).attr('cy', y(lp.v)).attr('r', 3.5).attr('fill', P.gold);
     if (first && !reduce) {
       var L = line.node().getTotalLength();
-      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(600).duration(1400).ease(d3.easeCubicOut).attr('stroke-dashoffset', 0);
+      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(250).duration(900).ease(d3.easeCubicOut).attr('stroke-dashoffset', 0);
     }
   }
 
@@ -617,7 +619,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       if (showPace) {
         var ghost = G.append('rect').attr('x', x0).attr('width', bw).attr('rx', 6)
           .attr('fill', 'url(#' + pid + ')').attr('stroke', P.gold).attr('stroke-width', 1.5).attr('stroke-dasharray', '5 3');
-        if (anim) ghost.attr('y', y(v || 0)).attr('height', y(0) - y(v || 0)).transition().delay(900).duration(900).ease(d3.easeCubicOut).attr('y', y(p)).attr('height', y(0) - y(p));
+        if (anim) ghost.attr('y', y(v || 0)).attr('height', y(0) - y(v || 0)).transition().delay(450).duration(650).ease(d3.easeCubicOut).attr('y', y(p)).attr('height', y(0) - y(p));
         else ghost.attr('y', y(p)).attr('height', y(0) - y(p));
       }
       if (v != null && v !== 0) {
@@ -625,15 +627,15 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
         var b = G.append('rect').attr('x', x0).attr('width', bw).attr('rx', 6)
           .attr('fill', v < 0 ? P.neg : isCur ? 'url(#' + gid + ')' : 'url(#' + sid + ')')
           .attr('filter', isCur ? 'url(#' + fid + ')' : null);
-        if (anim) b.attr('y', y(0)).attr('height', 0).transition().delay(i * 90).duration(1000).ease(d3.easeCubicOut).attr('y', yv).attr('height', hv);
+        if (anim) b.attr('y', y(0)).attr('height', 0).transition().delay(i * 55).duration(700).ease(d3.easeCubicOut).attr('y', yv).attr('height', hv);
         else b.attr('y', yv).attr('height', hv);
       }
       if (g != null) {
         var gl = G.append('line').attr('y1', y(g)).attr('y2', y(g)).attr('stroke', P.goal).attr('stroke-width', 3).attr('stroke-linecap', 'round');
         var gt = G.append('text').attr('x', cxm).attr('y', y(g) - 8).attr('text-anchor', 'middle').attr('fill', P.goal).style('font-size', '11.5px').style('font-weight', 700).style('letter-spacing', '0.04em').text('GOAL ' + fmtShort(g));
         if (anim) {
-          gl.attr('x1', x0 - 6).attr('x2', x0 - 6).transition().delay(1300 + i * 80).duration(600).ease(d3.easeCubicOut).attr('x2', x0 + bw + 6);
-          gt.attr('opacity', 0).transition().delay(1700 + i * 80).duration(400).attr('opacity', 1);
+          gl.attr('x1', x0 - 6).attr('x2', x0 - 6).transition().delay(700 + i * 50).duration(450).ease(d3.easeCubicOut).attr('x2', x0 + bw + 6);
+          gt.attr('opacity', 0).transition().delay(900 + i * 50).duration(300).attr('opacity', 1);
         } else gl.attr('x1', x0 - 6).attr('x2', x0 + bw + 6);
       }
       var labels = [];
@@ -655,7 +657,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
             .style('font-family', DISPLAY).style('font-size', '15px').style('font-weight', 700).text(fmtShort(v)));
         }
       }
-      if (anim) labels.forEach(function (l) { l.attr('opacity', 0).transition().delay(900 + i * 90).duration(500).attr('opacity', 1); });
+      if (anim) labels.forEach(function (l) { l.attr('opacity', 0).transition().delay(450 + i * 55).duration(350).attr('opacity', 1); });
       svg.append('text').attr('x', x(r.month) + x.bandwidth() / 2).attr('y', H - 9).attr('text-anchor', 'middle')
         .attr('fill', isCur ? P.gold : P.muted).style('font-size', '12px').style('font-weight', isCur ? 800 : 500).text(title(r.month));
     });
@@ -740,11 +742,11 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
 
     if (first && !reduce) {
       var L = line.node().getTotalLength();
-      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(500).duration(2200).ease(d3.easeCubicInOut).attr('stroke-dashoffset', 0)
+      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(150).duration(1300).ease(d3.easeCubicInOut).attr('stroke-dashoffset', 0)
         .on('end', function () { line.attr('stroke-dasharray', null); });
-      area.attr('opacity', 0).transition().delay(1400).duration(1200).attr('opacity', 1);
-      mpts.forEach(function (s, i) { s.attr('opacity', 0).transition().delay(800 + Math.floor(i / 2) * 330).duration(400).attr('opacity', 1); });
-      [proj, dot, endDot, endLab, endSub, nowLab].forEach(function (s, i) { s.attr('opacity', 0).transition().delay(2600 + i * 80).duration(600).attr('opacity', 1); });
+      area.attr('opacity', 0).transition().delay(700).duration(800).attr('opacity', 1);
+      mpts.forEach(function (s, i) { s.attr('opacity', 0).transition().delay(300 + Math.floor(i / 2) * 200).duration(400).attr('opacity', 1); });
+      [proj, dot, endDot, endLab, endSub, nowLab].forEach(function (s, i) { s.attr('opacity', 0).transition().delay(1400 + i * 60).duration(400).attr('opacity', 1); });
     }
 
     var tip = tipFor(box);
@@ -772,15 +774,15 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     var max = d3.max(D.sources, function (s) { return s.deals; }) || 1;
     var pairs = [];
     D.sources.forEach(function (s, i) {
-      var row = document.createElement('div'); row.className = 'hbar' + (s.source === 'ADVISOR REF' ? ' adv' : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.5 + i * 0.05) + 's';
+      var row = document.createElement('div'); row.className = 'hbar' + (s.source === 'ADVISOR REF' ? ' adv' : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.2 + i * 0.03) + 's';
       var lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = pretty(s.source);
       var bar = document.createElement('div'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
       var val = document.createElement('div'); val.className = 'val num';
       var b = document.createElement('b'); val.appendChild(b);
       var gs = document.createElement('span'); val.appendChild(document.createTextNode('  ')); val.appendChild(gs);
       row.appendChild(lab); row.appendChild(bar); row.appendChild(val); box.appendChild(row);
-      setNum(b, 'sd-' + s.source, s.deals, fInt, 1200);
-      setNum(gs, 'sg-' + s.source, s.gross, money, 1400);
+      setNum(b, 'sd-' + s.source, s.deals, fInt, 800);
+      setNum(gs, 'sg-' + s.source, s.gross, money, 900);
       pairs.push([fill, s.deals / max * 100]);
     });
     setWidths(pairs);
@@ -793,7 +795,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     var pairs = [], rank = 0, prevC = null;
     D.advisors.forEach(function (a, i) {
       if (a.customers !== prevC) { rank = i + 1; prevC = a.customers; }
-      var row = document.createElement('div'); row.className = 'row' + (rank <= 3 ? ' top' + rank : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.55 + i * 0.06) + 's';
+      var row = document.createElement('div'); row.className = 'row' + (rank <= 3 ? ' top' + rank : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.2 + i * 0.04) + 's';
       var r = document.createElement('div'); r.className = 'rank'; r.textContent = rank;
       var n = document.createElement('div'); n.className = 'nm'; n.textContent = title(a.advisor);
       var bar = document.createElement('div'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
@@ -810,7 +812,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     D.months.forEach(function (r, i) {
       var tr = document.createElement('tr');
       tr.className = (r.status === 'Current' ? 'cur' : r.status === 'Ahead' ? 'ahead' : '') + (first ? ' rise' : '');
-      tr.style.animationDelay = (0.6 + i * 0.05) + 's';
+      tr.style.animationDelay = (0.25 + i * 0.03) + 's';
       var cells = [FULL[r.m - 1], null, intOr(r.deals), intOr(r.pace_deals), intOr(r.goal_deals), r.gross == null ? '—' : money(r.gross), r.pace_gross == null ? '—' : money(r.pace_gross), money(r.avg), intOr(r.refs)];
       cells.forEach(function (c, j) {
         var td = document.createElement('td'); td.className = 'num';
@@ -845,7 +847,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
     ];
     if (!box.children.length) {
       items.forEach(function (it, i) {
-        var a = document.createElement('article'); a.className = 'card kpi rise'; a.style.animationDelay = (0.2 + i * 0.05) + 's';
+        var a = document.createElement('article'); a.className = 'card kpi rise'; a.style.animationDelay = (0.1 + i * 0.03) + 's';
         a.innerHTML = '<div class="k-label"></div><div class="k-scope"></div><div class="k-value num"></div><div class="k-delta"></div><div class="k-spark"></div>';
         box.appendChild(a);
       });
@@ -854,7 +856,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       var a = box.children[i];
       a.querySelector('.k-label').textContent = it.label;
       a.querySelector('.k-scope').textContent = it.scope;
-      setNum(a.querySelector('.k-value'), it.k, it.v, it.fmt, 1500);
+      setNum(a.querySelector('.k-value'), it.k, it.v, it.fmt, 900);
       var dn = a.querySelector('.k-delta');
       if (it.d) delta(dn, it.d[0], it.d[1], it.d[2], it.d[3]);
       else { dn.className = 'k-delta'; dn.textContent = it.note; }
@@ -908,7 +910,7 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       el('m-rail').style.width = (c.elapsed / c.days * 100) + '%';
       el('y-rail').style.width = (D.ytd.elapsed / D.ytd.days * 100) + '%';
     };
-    if (first && !reduce) setTimeout(setRail, 300); else setRail();
+    if (first && !reduce) setTimeout(setRail, 150); else setRail();
 
     gauge('g-deals', { value: c.pace_deals, actual: c.deals, goal: c.goal_deals, best: D.best, fmt: fInt, fmtShort: fInt });
     gauge('g-gross', { value: c.pace_gross, actual: c.gross, goal: c.goal_gross, best: D.bestGross, fmt: money, fmtShort: moneyShort });
@@ -958,15 +960,27 @@ footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.
       document.head.appendChild(s);
     });
   }
+  var CACHE_KEY = 'sds-feed-v1';
+  function saveLast(raw) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(raw)); } catch (e) {} }
+  function readLast() { try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+  var showedCached = false;
   function load() {
     el('refresh').classList.add('spin');
-    var done = function (raw) { el('err').style.display = 'none'; el('refresh').classList.remove('spin'); secondsLeft = REFRESH_SECONDS; render(raw); };
+    var done = function (raw) {
+      el('err').style.display = 'none'; el('refresh').classList.remove('spin'); secondsLeft = REFRESH_SECONDS;
+      saveLast(raw); render(raw);
+    };
+    var fail = function (e) { if (showedCached) { el('refresh').classList.remove('spin'); el('updated').textContent = 'Showing last numbers · could not refresh'; } else onError(e); };
     if (window.__MOCK__) { setTimeout(function () { done(window.__MOCK__); }, 150); return; }
     if (window.google && google.script && google.script.run) {
       google.script.run.withSuccessHandler(done).withFailureHandler(onError).getDashboardData();
       return;
     }
-    viaFetch().catch(function () { return viaScriptTag(); }).then(done, onError);
+    if (!showedCached && first) {
+      var cached = readLast();
+      if (cached) { showedCached = true; render(cached); el('updated').textContent = 'Updating…'; }
+    }
+    viaFetch().catch(function () { return viaScriptTag(); }).then(done, fail);
   }
   el('refresh').addEventListener('click', load);
   setInterval(function () {
