@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mark Kia Service Drive Sales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+/* Layout: top bar, hero (month banner + three speedometer gauges), KPI strip with
+   change vs last month, month charts, running total, sources + advisor leaderboard, table.
+   Palette: Kia Midnight Black ground, silver for history, Kia gold for "now", white for goals. */
+:root {
+  color-scheme: dark;
+  --bg0: #04101A;
+  --bg1: #0A1F2E;
+  --panel: rgba(14, 33, 48, 0.72);
+  --line: rgba(199, 200, 202, 0.13);
+  --fg: #F2F2F0;
+  --muted: #A7ABAD;
+  --dim: #6D7376;
+  --silver: #C7C8CA;
+  --silver-deep: #6F777B;
+  --gold: #D2BC85;
+  --gold-hi: #F0DEAE;
+  --gold-deep: #85754E;
+  --goal: #FFFFFF;
+  --live: #8DB255;
+  --up: #8DB255;
+  --down: #FF8A6B;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "Manrope", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 16px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+html { background: var(--bg0); }
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 560px at 88% -12%, rgba(210, 188, 133, 0.14), transparent 60%),
+    radial-gradient(900px 520px at -12% 8%, rgba(199, 200, 202, 0.07), transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg0) 75%);
+  background-attachment: fixed;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px));
+  display: grid;
+  gap: 18px;
+}
+.num { font-variant-numeric: tabular-nums; }
+
+/* Top bar */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand b { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: 0.1em; }
+.brand .mk {
+  letter-spacing: 0.24em;
+  background: linear-gradient(100deg, var(--gold-deep), var(--gold-hi) 45%, var(--gold) 60%, var(--gold-deep));
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand .sep { width: 1px; height: 18px; background: var(--line); }
+.brand .yr { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--gold); letter-spacing: 0.06em; }
+.status { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12.5px; }
+.live { display: inline-flex; align-items: center; gap: 8px; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
+.btn {
+  appearance: none; border: 1px solid var(--line); background: rgba(210, 188, 133, 0.08); color: var(--fg);
+  border-radius: 999px; padding: 7px 14px 7px 10px; font: 600 12.5px var(--font-body);
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; transition: background .2s, border-color .2s;
+}
+.btn:hover { background: rgba(210, 188, 133, 0.18); border-color: rgba(210, 188, 133, 0.55); }
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn svg { width: 18px; height: 18px; }
+.btn.spin svg .arrow { animation: spin 0.9s linear infinite; transform-origin: 9px 9px; }
+
+/* Cards */
+.card {
+  position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); min-width: 0; overflow: hidden;
+}
+.card::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(210, 188, 133, 0.45), transparent);
+}
+.card h3 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; text-transform: uppercase; }
+.card .note { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 2.1fr); gap: 18px; align-items: stretch; }
+.month-card { display: grid; align-content: space-between; gap: 16px; }
+.month-card > div { min-width: 0; }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.month-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 72px; line-height: 0.95; letter-spacing: 0.02em; white-space: nowrap; margin: 6px 0 0;
+  background: linear-gradient(100deg, #FFFFFF 10%, var(--gold-hi) 40%, var(--gold) 55%, #FFFFFF 90%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.take { margin: 10px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; max-width: 42ch; }
+.take b { color: var(--fg); font-weight: 700; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 5px 11px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04);
+}
+.chip.up { color: var(--up); border-color: rgba(141, 178, 85, 0.5); background: rgba(141, 178, 85, 0.1); }
+.chip.down { color: var(--down); border-color: rgba(255, 138, 107, 0.5); background: rgba(255, 138, 107, 0.1); }
+.rail-label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.rail { position: relative; height: 10px; border-radius: 999px; background: rgba(199, 200, 202, 0.12); overflow: hidden; }
+.rail i {
+  position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold), var(--gold-hi));
+  box-shadow: 0 0 16px rgba(210, 188, 133, 0.5); transition: width 1.4s var(--ease);
+}
+.rail i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: translateX(-100%); }
+.rails { display: grid; gap: 16px; }
+
+.gauges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.gauge { display: grid; justify-items: center; text-align: center; padding: 16px 12px 14px; }
+.gauge svg { width: 100%; max-width: 260px; height: auto; display: block; overflow: visible; }
+.gauge .g-title { font-family: var(--font-display); font-size: 16px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.gauge .g-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.gauge .g-sub b { color: var(--fg); }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.kpi { padding: 14px 14px 10px; }
+.kpi .k-label { font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.kpi .k-scope { font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+.kpi .k-value { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 3vw, 36px); line-height: 1.1; margin-top: 6px; }
+.kpi .k-delta { font-size: 12px; font-weight: 700; margin-top: 2px; min-height: 16px; color: var(--muted); }
+.kpi .k-delta.up { color: var(--up); }
+.kpi .k-delta.down { color: var(--down); }
+.kpi .k-spark { height: 34px; margin-top: 6px; }
+.kpi .k-spark svg { width: 100%; height: 34px; display: block; overflow: visible; }
+
+/* Grids */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.chart { position: relative; min-height: 290px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .bar-g { transition: opacity .2s; }
+.chart.hovering .bar-g { opacity: 0.35; }
+.chart.hovering .bar-g.on { opacity: 1; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.a { background: linear-gradient(180deg, #E6E7E8, var(--silver-deep)); }
+.sw.c { background: linear-gradient(180deg, var(--gold-hi), var(--gold-deep)); }
+.sw.p { background: repeating-linear-gradient(135deg, rgba(210,188,133,.6) 0 3px, rgba(210,188,133,.12) 3px 6px); }
+.sw.g { height: 3px; border-radius: 2px; background: var(--goal); }
+.sw.l { height: 3px; border-radius: 2px; background: var(--gold); }
+.sw.d { height: 0; border-top: 2px dashed var(--gold); border-radius: 0; }
+
+.tip {
+  position: absolute; pointer-events: none; background: rgba(4, 16, 26, 0.95); border: 1px solid rgba(210, 188, 133, 0.45);
+  border-radius: 10px; padding: 8px 10px; font-size: 12.5px; white-space: nowrap;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 18px rgba(210, 188, 133, 0.15); z-index: 5; transition: opacity .15s;
+}
+.tip .t { color: var(--gold); margin-bottom: 4px; font-weight: 700; letter-spacing: .03em; }
+.tip .r { display: flex; align-items: center; gap: 6px; }
+
+/* Bars and leaderboard */
+.hbars { display: grid; gap: 10px; }
+.hbar { display: grid; grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) 132px; gap: 12px; align-items: center; font-size: 13.5px; }
+.hbar .lab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar .bar { height: 12px; border-radius: 999px; background: rgba(199, 200, 202, 0.1); overflow: hidden; }
+.hbar .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--silver-deep), var(--silver)); transition: width 1.2s var(--ease); }
+.hbar.adv .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold), var(--gold-hi)); box-shadow: 0 0 12px rgba(210, 188, 133, 0.45); }
+.hbar .val { color: var(--muted); text-align: right; white-space: nowrap; }
+.hbar .val b { color: var(--fg); font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+
+.board { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(60px, 1.2fr) 36px; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(199, 200, 202, 0.05); border: 1px solid transparent; }
+.row.top1 { border-color: rgba(210, 188, 133, 0.5); background: linear-gradient(90deg, rgba(210, 188, 133, 0.16), rgba(210, 188, 133, 0.02)); }
+.rank { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; font-size: 16px; background: rgba(199, 200, 202, 0.12); color: var(--muted); }
+.row.top1 .rank { background: linear-gradient(135deg, var(--gold-hi), var(--gold-deep)); color: #1E1708; box-shadow: 0 0 16px rgba(210, 188, 133, 0.55); }
+.row.top2 .rank { background: linear-gradient(135deg, #F4F4F4, #8C9091); color: #10181F; }
+.row.top3 .rank { background: linear-gradient(135deg, #D9A97C, #8A5A33); color: #1E1006; }
+.row .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .bar { height: 8px; border-radius: 999px; background: rgba(199, 200, 202, 0.1); overflow: hidden; }
+.row .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--silver-deep), var(--silver)); transition: width 1.2s var(--ease); }
+.row.top1 .bar i { background: linear-gradient(90deg, var(--gold-deep), var(--gold-hi)); }
+.row .ct { font-family: var(--font-display); font-weight: 700; font-size: 20px; text-align: right; }
+.foot-stat { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; color: var(--muted); font-size: 13px; }
+.foot-stat b { font-family: var(--font-display); font-size: 24px; color: var(--gold); font-weight: 600; }
+
+/* Table */
+.tablebox { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: right; padding: 10px 12px; color: var(--muted); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { text-align: right; padding: 11px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+tr.cur td { background: rgba(210, 188, 133, 0.1); font-weight: 700; }
+tr.cur td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+tr.ahead td { color: var(--dim); }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .06em; border: 1px solid var(--line); color: var(--muted); }
+.pill.cur { color: var(--gold); border-color: rgba(210, 188, 133, 0.6); background: rgba(210, 188, 133, 0.1); }
+.neg { color: var(--down); }
+footer { color: var(--dim); font-size: 12px; text-align: center; line-height: 1.6; }
+.err { display: none; padding: 14px 16px; border-radius: 12px; background: rgba(255, 138, 107, 0.1); border: 1px solid rgba(255, 138, 107, 0.45); color: #FFD2C4; }
+
+@media (max-width: 1100px) { .hero { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .gauges, .grid-2 { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gauge svg { max-width: 240px; } }
+
+/* Motion */
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .rise { animation: rise .8s var(--ease) both; }
+  .month-name { animation: sheen 3.2s 0.3s var(--ease) both; }
+  .brand .mk { animation: sheen 3.2s 0.1s var(--ease) both; }
+  .live i { animation: pulse 2s ease-out infinite; }
+  .rail i::after { animation: shine 3s 1.4s ease-in-out infinite; }
+  .bump { animation: bump 1.2s var(--ease); }
+  .march { animation: march 1.2s linear infinite; }
+  .chip { animation: pop .6s 1.6s var(--ease) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  @keyframes sheen { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(141, 178, 85, 0.6); } 70% { box-shadow: 0 0 0 9px rgba(141, 178, 85, 0); } 100% { box-shadow: 0 0 0 0 rgba(141, 178, 85, 0); } }
+  @keyframes shine { 0% { transform: translateX(-100%); } 60%, 100% { transform: translateX(100%); } }
+  @keyframes bump { 0% { color: var(--gold-hi); text-shadow: 0 0 18px rgba(240, 222, 174, 0.85); } 100% { text-shadow: none; } }
+  @keyframes march { to { stroke-dashoffset: -22; } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.8); } 60% { transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top rise">
+    <div class="brand"><b class="mk">MARK KIA</b><span class="sep"></span><b>SERVICE DRIVE SALES</b><span class="yr" id="yr"></span></div>
+    <div class="status">
+      <span class="live"><i></i><span id="updated">Loading…</span></span>
+      <button class="btn" id="refresh" type="button" aria-label="Refresh now">
+        <svg viewBox="0 0 18 18" aria-hidden="true"><g class="arrow"><path d="M15 9a6 6 0 1 1-1.8-4.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15 3v3.5h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+        <span id="countdown">Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <section class="hero">
+    <article class="card month-card rise" style="animation-delay:.05s">
+      <div>
+        <div class="eyebrow">Current month</div>
+        <div class="month-name" id="month-name">&nbsp;</div>
+        <p class="take" id="take">&nbsp;</p>
+        <div class="chip" id="chip" hidden></div>
+      </div>
+      <div class="rails">
+        <div><div class="rail-label"><span>Month</span><span class="num" id="m-days">&nbsp;</span></div><div class="rail"><i id="m-rail"></i></div></div>
+        <div><div class="rail-label"><span>Year</span><span class="num" id="y-days">&nbsp;</span></div><div class="rail"><i id="y-rail"></i></div></div>
+      </div>
+    </article>
+    <div class="gauges">
+      <article class="card gauge rise" style="animation-delay:.12s"><div class="g-title">Month deals</div><svg id="g-deals" viewBox="-16 0 272 172" role="img" aria-label="Month deals tracking gauge"></svg><div class="g-sub" id="g-deals-sub">&nbsp;</div></article>
+      <article class="card gauge rise" style="animation-delay:.19s"><div class="g-title">Month gross</div><svg id="g-gross" viewBox="-16 0 272 172" role="img" aria-label="Month gross tracking gauge"></svg><div class="g-sub" id="g-gross-sub">&nbsp;</div></article>
+      <article class="card gauge rise" style="animation-delay:.26s"><div class="g-title">Year deals</div><svg id="g-year" viewBox="-16 0 272 172" role="img" aria-label="Year deals tracking gauge"></svg><div class="g-sub" id="g-year-sub">&nbsp;</div></article>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid-2">
+    <article class="card rise" style="animation-delay:.3s">
+      <div class="card-head">
+        <div><h3>Deals by month</h3><p class="note">Delivered each month. This month shows delivered and where it's tracking.</p></div>
+        <div class="legend"><span><i class="sw a"></i>Delivered</span><span><i class="sw c"></i>This month</span><span><i class="sw p"></i>Tracking</span><span><i class="sw g"></i>Goal</span></div>
+      </div>
+      <div class="chart" id="c-deals"></div>
+    </article>
+    <article class="card rise" style="animation-delay:.36s">
+      <div class="card-head">
+        <div><h3>Total gross by month</h3><p class="note">Front plus back gross.</p></div>
+        <div class="legend"><span><i class="sw a"></i>Delivered</span><span><i class="sw c"></i>This month</span><span><i class="sw p"></i>Tracking</span><span><i class="sw g"></i>Goal</span></div>
+      </div>
+      <div class="chart" id="c-gross"></div>
+    </article>
+  </section>
+
+  <article class="card rise" style="animation-delay:.4s">
+    <div class="card-head">
+      <div><h3>Running total, deals</h3><p class="note">Every deal so far this year, with month-end totals, and where the year lands at today's pace.</p></div>
+      <div class="legend"><span><i class="sw l"></i>Delivered</span><span><i class="sw d"></i>Year-end tracking</span></div>
+    </div>
+    <div class="chart" id="c-run"></div>
+  </article>
+
+  <section class="grid-2">
+    <article class="card rise" style="animation-delay:.44s">
+      <div class="card-head"><div><h3>Sources</h3><p class="note">Deals and total gross by source, year to date. Advisor referrals are grouped and shown in gold.</p></div></div>
+      <div class="hbars" id="sources"></div>
+    </article>
+    <article class="card rise" style="animation-delay:.48s">
+      <div class="card-head"><div><h3>Advisor leaderboard</h3><p class="note">Customers each service advisor turned over this year.</p></div></div>
+      <div class="board" id="board"></div>
+      <div class="foot-stat"><span>Average gross per advisor-referred deal</span><b class="num" id="adv-avg">&nbsp;</b></div>
+    </article>
+  </section>
+
+  <article class="card rise" style="animation-delay:.52s">
+    <div class="card-head"><div><h3>Month detail</h3><p class="note">Finished months show their final numbers as tracking.</p></div></div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Month</th><th>Status</th><th>Deals</th><th>Tracking</th><th>Goal</th><th>Total gross</th><th>Tracking gross</th><th>Avg / deal</th><th>Referrals</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </article>
+
+  <footer>Mark Kia · Scottsdale, Arizona<br>Reads the YTD and DASHBOARD tabs of your Service Drive Sales sheet. Refreshes every 5 minutes.<br>Tracking = done so far ÷ days gone by × days in the month (or year).</footer>
+</div>
+
+<script>
+(function () {
+  var REFRESH_SECONDS = 300;
+  var NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  var FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var first = true, last = null, shown = {}, secondsLeft = REFRESH_SECONDS;
+  var DISPLAY = 'Barlow Condensed, Arial Narrow, sans-serif';
+  var P = {
+    fg: '#F2F2F0', muted: '#A7ABAD', dim: '#6D7376', ink: '#04101A',
+    silverHi: '#E6E7E8', silver: '#C7C8CA', silverDeep: '#6F777B',
+    goldHi: '#F0DEAE', gold: '#D2BC85', goldDeep: '#85754E',
+    goal: '#FFFFFF', grid: 'rgba(199,200,202,0.09)', axis: 'rgba(199,200,202,0.32)', track: 'rgba(199,200,202,0.12)', neg: '#FF8A6B'
+  };
+
+  var fInt = d3.format(',.0f');
+  function money(n) { if (n == null || !isFinite(n)) return '—'; return (n < 0 ? '-$' : '$') + d3.format(',.0f')(Math.abs(n)); }
+  function moneyShort(n) {
+    if (n == null || !isFinite(n)) return '—';
+    var a = Math.abs(n), s;
+    if (a >= 1e6) s = '$' + d3.format('.2~f')(a / 1e6) + 'M';
+    else if (a >= 1e3) s = '$' + d3.format('.1~f')(a / 1e3) + 'k';
+    else s = '$' + d3.format(',.0f')(a);
+    return (n < 0 ? '-' : '') + s;
+  }
+  function intOr(n) { return n == null || !isFinite(n) ? '—' : fInt(n); }
+  function title(s) { return s.length <= 3 ? s : s.charAt(0) + s.slice(1).toLowerCase(); }
+  function pretty(s) {
+    var map = { 'ADVISOR REF': 'Advisor ref', 'INTERNAL REF': 'Internal ref', 'OUTSIDE REF': 'Outside ref', 'SERVICE UP': 'Service up', 'LEASE END': 'Lease end', 'PHONE POP': 'Phone pop', 'BDC': 'BDC' };
+    return map[s] || title(s || 'No source');
+  }
+  function el(id) { return document.getElementById(id); }
+
+  // ---------- Math (same as the sheet's TRACKING rows) ----------
+  function compute(raw) {
+    var deals = raw.deals;
+    var t = raw.today.split('-').map(Number);
+    var today = new Date(t[0], t[1] - 1, t[2]);
+    var yr = raw.year;
+    var firstDate = deals.length ? deals.map(function (d) { return d.date; }).sort()[0] : (yr + '-01-01');
+    var m0 = Number(firstDate.slice(5, 7));
+    var months = [];
+    for (var m = m0; m <= 12; m++) {
+      var key = yr + '-' + String(m).padStart(2, '0');
+      var ds = deals.filter(function (d) { return d.date.slice(0, 7) === key; });
+      var start = new Date(yr, m - 1, 1), end = new Date(yr, m, 0), days = end.getDate();
+      var status = today > end ? 'Final' : today < start ? 'Ahead' : 'Current';
+      var elapsed = status === 'Final' ? days : status === 'Ahead' ? 0 : today.getDate();
+      var sum = function (f) { return ds.reduce(function (a, d) { return a + d[f]; }, 0); };
+      var count = sum('new') + sum('used');
+      var gross = sum('total');
+      var goal = raw.goals.filter(function (g) { return g.month === NAMES[m - 1]; })[0] || {};
+      var ahead = status === 'Ahead';
+      months.push({
+        m: m, month: NAMES[m - 1], status: status, days: days, elapsed: elapsed, left: days - elapsed,
+        deals: ahead ? null : count, gross: ahead ? null : gross,
+        avg: count ? gross / count : null,
+        refs: ahead ? null : ds.filter(function (d) { return d.ref; }).length,
+        pace_deals: elapsed ? count / elapsed * days : null,
+        pace_gross: elapsed ? gross / elapsed * days : null,
+        goal_deals: goal.goal_deals == null ? null : goal.goal_deals,
+        goal_gross: goal.goal_gross == null ? null : goal.goal_gross
+      });
+    }
+    var live = months.filter(function (x) { return x.status !== 'Ahead'; });
+    var cur = months.filter(function (x) { return x.status === 'Current'; })[0] || live[live.length - 1];
+    var prev = months[months.indexOf(cur) - 1] || null;
+    var tot = function (f) { return live.reduce(function (a, x) { return a + (x[f] || 0); }, 0); };
+    var yDays = months.reduce(function (a, x) { return a + x.days; }, 0);
+    var yEl = months.reduce(function (a, x) { return a + x.elapsed; }, 0);
+    var ytdDeals = tot('deals'), ytdGross = tot('gross');
+    var finals = months.filter(function (x) { return x.status === 'Final'; });
+
+    var src = {};
+    deals.forEach(function (d) {
+      var s = d.source || 'NO SOURCE';
+      if (/ REF$/.test(s) && s !== 'INTERNAL REF' && s !== 'OUTSIDE REF') s = 'ADVISOR REF';
+      src[s] = src[s] || { source: s, deals: 0, gross: 0 };
+      src[s].deals += d.new + d.used; src[s].gross += d.total;
+    });
+    var sources = Object.keys(src).map(function (k) { var g = src[k]; g.avg = g.deals ? g.gross / g.deals : null; return g; })
+      .sort(function (a, b) { return b.deals - a.deals || b.gross - a.gross; });
+
+    var adv = {};
+    deals.forEach(function (d) {
+      var s = d.source || '';
+      if (!/ REF$/.test(s) || s === 'INTERNAL REF' || s === 'OUTSIDE REF') return;
+      var n = s.replace(/ REF$/, '');
+      adv[n] = (adv[n] || 0) + 1;
+    });
+    var advisors = Object.keys(adv).map(function (k) { return { advisor: k, customers: adv[k] }; })
+      .sort(function (a, b) { return b.customers - a.customers || a.advisor.localeCompare(b.advisor); });
+
+    var byDay = d3.rollup(deals, function (v) { return d3.sum(v, function (d) { return d.new + d.used; }); }, function (d) { return d.date; });
+    var run = [], acc = 0;
+    for (var day = new Date(yr, m0 - 1, 1); day <= today; day.setDate(day.getDate() + 1)) {
+      var k = day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0') + '-' + String(day.getDate()).padStart(2, '0');
+      acc += byDay.get(k) || 0;
+      run.push({ date: new Date(day), total: acc });
+    }
+
+    return {
+      year: yr, today: today, months: months, cur: cur, prev: prev, sources: sources, advisors: advisors, run: run,
+      best: d3.max(finals, function (x) { return x.deals; }) || 0,
+      bestGross: d3.max(finals, function (x) { return x.gross; }) || 0,
+      ytd: {
+        deals: ytdDeals, gross: ytdGross, avg: ytdDeals ? ytdGross / ytdDeals : null, refs: tot('refs'),
+        days: yDays, elapsed: yEl, left: yDays - yEl,
+        pace_deals: yEl ? ytdDeals / yEl * yDays : null,
+        pace_gross: yEl ? ytdGross / yEl * yDays : null,
+        end: new Date(yr, 11, 31)
+      }
+    };
+  }
+
+  // ---------- Animated numbers ----------
+  function setNum(node, key, value, fmt, dur) {
+    var from = shown[key];
+    shown[key] = value;
+    if (value == null || !isFinite(value)) { node.textContent = '—'; return; }
+    if (reduce || (from != null && Math.abs(from - value) < 1e-9)) { node.textContent = fmt(value); return; }
+    var start = from == null ? 0 : from;
+    if (from != null) { node.classList.remove('bump'); void node.offsetWidth; node.classList.add('bump'); }
+    d3.select(node).transition().duration(dur || 1400).ease(d3.easeCubicOut)
+      .tween('text', function () {
+        var i = d3.interpolateNumber(start, value);
+        return function (t) { node.textContent = fmt(t === 1 ? value : i(t)); };
+      });
+  }
+
+  // ---------- SVG helpers ----------
+  function glow(defs, id, sd) {
+    var f = defs.append('filter').attr('id', id).attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+    f.append('feGaussianBlur').attr('stdDeviation', sd).attr('result', 'b');
+    var mg = f.append('feMerge'); mg.append('feMergeNode').attr('in', 'b'); mg.append('feMergeNode').attr('in', 'SourceGraphic');
+  }
+  function vgrad(defs, id, stops) {
+    var g = defs.append('linearGradient').attr('id', id).attr('x1', 0).attr('x2', 0).attr('y1', 0).attr('y2', 1);
+    stops.forEach(function (s) { g.append('stop').attr('offset', s[0]).attr('stop-color', s[1]).attr('stop-opacity', s[2] == null ? 1 : s[2]); });
+  }
+
+  // ---------- Gauge ----------
+  var A0 = -Math.PI * 2 / 3, A1 = Math.PI * 2 / 3;
+  function niceMax(v) {
+    if (!v || v <= 0) return 10;
+    var p = Math.pow(10, Math.floor(Math.log10(v)));
+    var steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    for (var i = 0; i < steps.length; i++) if (steps[i] * p >= v) return steps[i] * p;
+    return 10 * p;
+  }
+  function gauge(svgId, o) {
+    var svg = d3.select('#' + svgId);
+    var cx = 120, cy = 108, R = 96, r = 80;
+    var max = niceMax(Math.max(o.value || 0, o.goal || 0, o.best || 0, o.actual || 0) * 1.12);
+    var ang = function (v) { return A0 + (Math.max(0, Math.min(v, max)) / max) * (A1 - A0); };
+    var arc = d3.arc().innerRadius(r).outerRadius(R).cornerRadius(5);
+    var thin = d3.arc().innerRadius(r - 9).outerRadius(r - 5).cornerRadius(2);
+    var node = svg.node();
+    var fromV = first ? 0 : (node.__val || 0), fromA = first ? 0 : (node.__act || 0);
+    node.__val = o.value || 0; node.__act = o.actual || 0;
+    svg.interrupt('g'); svg.selectAll('*').remove();
+
+    var defs = svg.append('defs');
+    var gr = defs.append('linearGradient').attr('id', svgId + '-grad').attr('x1', 0).attr('x2', 1).attr('y1', 0).attr('y2', 0);
+    gr.append('stop').attr('offset', '0%').attr('stop-color', P.silverDeep);
+    gr.append('stop').attr('offset', '55%').attr('stop-color', P.silver);
+    gr.append('stop').attr('offset', '100%').attr('stop-color', P.goldHi);
+    glow(defs, svgId + '-glow', 3.5);
+
+    var g = svg.append('g').attr('transform', 'translate(' + cx + ',' + cy + ')');
+    g.append('path').attr('d', arc({ startAngle: A0, endAngle: A1 })).attr('fill', P.track);
+    d3.range(0, 6).forEach(function (i) {
+      var v = max * i / 5, a = ang(v) - Math.PI / 2;
+      g.append('line').attr('x1', Math.cos(a) * (R + 3)).attr('y1', Math.sin(a) * (R + 3)).attr('x2', Math.cos(a) * (R + 8)).attr('y2', Math.sin(a) * (R + 8)).attr('stroke', P.dim).attr('stroke-width', 1.5);
+      g.append('text').attr('x', Math.cos(a) * (R + 18)).attr('y', Math.sin(a) * (R + 18)).attr('dy', '0.35em')
+        .attr('text-anchor', Math.abs(Math.cos(a)) < 0.2 ? 'middle' : Math.cos(a) > 0 ? 'start' : 'end')
+        .attr('fill', P.muted).style('font-size', '11px').text(o.fmtShort(v));
+    });
+    var actPath = g.append('path').attr('fill', P.gold).attr('opacity', 0.85);
+    var valPath = g.append('path').attr('fill', 'url(#' + svgId + '-grad)').attr('filter', 'url(#' + svgId + '-glow)');
+    var marks = [];
+    if (o.goal) marks.push({ v: o.goal, c: P.goal, w: 4 });
+    if (o.best) marks.push({ v: o.best, c: P.gold, w: 3 });
+    marks.forEach(function (d) {
+      var a = ang(d.v) - Math.PI / 2;
+      g.append('line').attr('x1', Math.cos(a) * (r - 4)).attr('y1', Math.sin(a) * (r - 4)).attr('x2', Math.cos(a) * (R + 4)).attr('y2', Math.sin(a) * (R + 4))
+        .attr('stroke', d.c).attr('stroke-width', d.w).attr('stroke-linecap', 'round');
+    });
+    var needle = g.append('g');
+    needle.append('path').attr('d', 'M-3.5,0 L0,-' + (r - 14) + ' L3.5,0 Z').attr('fill', P.fg).attr('filter', 'url(#' + svgId + '-glow)');
+    g.append('circle').attr('r', 8).attr('fill', P.ink).attr('stroke', P.gold).attr('stroke-width', 2.5);
+    var bigSize = o.fmt(o.value || 0).length > 5 ? 28 : 34;
+    var big = g.append('text').attr('y', 46).attr('text-anchor', 'middle').style('font-family', DISPLAY).style('font-weight', 700).style('font-size', bigSize + 'px').attr('fill', P.fg);
+    g.append('text').attr('y', 62).attr('text-anchor', 'middle').style('font-size', '10px').style('letter-spacing', '0.2em').style('font-weight', 700).attr('fill', P.gold).text('TRACKING');
+
+    var draw = function (v, a, t) {
+      valPath.attr('d', arc({ startAngle: A0, endAngle: Math.max(A0 + 0.001, ang(v)) }));
+      actPath.attr('d', thin({ startAngle: A0, endAngle: Math.max(A0 + 0.001, ang(a)) }));
+      needle.attr('transform', 'rotate(' + (ang(v) * 180 / Math.PI) + ')');
+      big.text(o.fmt(t >= 1 ? (o.value || 0) : Math.max(0, v)));
+    };
+    var dur = reduce ? 0 : first ? 2000 : 900;
+    if (!dur) { draw(o.value || 0, o.actual || 0, 1); return; }
+    svg.transition('g').duration(dur).ease(first ? d3.easeBackOut.overshoot(1.15) : d3.easeCubicOut).tween('gauge', function () {
+      var iv = d3.interpolateNumber(fromV, o.value || 0), ia = d3.interpolateNumber(fromA, o.actual || 0);
+      return function (t) { draw(iv(t), ia(Math.min(1, t)), t); };
+    });
+  }
+
+  // ---------- Sparkline ----------
+  function spark(box, vals, color) {
+    box.innerHTML = '';
+    var pts = vals.map(function (v, i) { return { i: i, v: v }; }).filter(function (p) { return p.v != null; });
+    if (pts.length < 2) return;
+    var w = box.clientWidth || 120, h = 34;
+    var x = d3.scaleLinear().domain([0, vals.length - 1]).range([2, w - 4]);
+    var y = d3.scaleLinear().domain(d3.extent(pts, function (p) { return p.v; })).nice().range([h - 3, 4]);
+    var svg = d3.select(box).append('svg').attr('viewBox', '0 0 ' + w + ' ' + h).attr('preserveAspectRatio', 'none');
+    var id = 'sp' + Math.random().toString(36).slice(2, 8);
+    vgrad(svg.append('defs'), id, [[0, color, 0.3], [1, color, 0]]);
+    svg.append('path').datum(pts).attr('fill', 'url(#' + id + ')').attr('d', d3.area().x(function (p) { return x(p.i); }).y0(h).y1(function (p) { return y(p.v); }));
+    var line = svg.append('path').datum(pts).attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round')
+      .attr('d', d3.line().x(function (p) { return x(p.i); }).y(function (p) { return y(p.v); }));
+    var lp = pts[pts.length - 1];
+    svg.append('circle').attr('cx', x(lp.i)).attr('cy', y(lp.v)).attr('r', 3.5).attr('fill', P.gold);
+    if (first && !reduce) {
+      var L = line.node().getTotalLength();
+      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(600).duration(1400).ease(d3.easeCubicOut).attr('stroke-dashoffset', 0);
+    }
+  }
+
+  // ---------- Tooltip helper ----------
+  function tipFor(box) {
+    var t = box.querySelector('.tip');
+    if (!t) { t = document.createElement('div'); t.className = 'tip'; t.style.opacity = 0; box.appendChild(t); }
+    return {
+      show: function (event, titleText, lines) {
+        t.innerHTML = '';
+        var h = document.createElement('div'); h.className = 't'; h.textContent = titleText; t.appendChild(h);
+        lines.forEach(function (l) {
+          if (l[2] == null) return;
+          var r = document.createElement('div'); r.className = 'r';
+          var s = document.createElement('i'); s.className = 'sw ' + l[0]; r.appendChild(s);
+          r.appendChild(document.createTextNode(l[1] + '  ' + l[2])); t.appendChild(r);
+        });
+        var p = d3.pointer(event, box);
+        t.style.opacity = 1;
+        var tw = t.offsetWidth;
+        t.style.left = Math.max(0, Math.min(box.clientWidth - tw, p[0] + 14)) + 'px';
+        t.style.top = Math.max(0, p[1] - 70) + 'px';
+      },
+      hide: function () { t.style.opacity = 0; }
+    };
+  }
+
+  // ---------- Month bar chart ----------
+  function bars(boxId, months, vKey, pKey, gKey, fmt, fmtShort) {
+    var box = el(boxId);
+    box.innerHTML = '';
+    box.classList.remove('hovering');
+    var W = Math.max(280, box.clientWidth), H = 290, top = 38, bottom = 30;
+    var maxV = d3.max(months, function (r) { return Math.max(r[vKey] || 0, r.status === 'Current' ? r[pKey] || 0 : 0, r[gKey] || 0); }) || 1;
+    var y = d3.scaleLinear().domain([0, maxV * 1.12]).nice(4).range([H - bottom, top]);
+    var svg = d3.select(box).append('svg').attr('viewBox', '0 0 ' + W + ' ' + H);
+    var ticks = y.ticks(4);
+    var probe = svg.append('text').style('font-size', '12px');
+    var left = 0; ticks.forEach(function (t) { probe.text(fmtShort(t)); left = Math.max(left, probe.node().getComputedTextLength()); });
+    probe.remove(); left = Math.ceil(left) + 12;
+    var x = d3.scaleBand().domain(months.map(function (r) { return r.month; })).range([left, W - 4]).paddingInner(0.3).paddingOuter(0.15);
+
+    var defs = svg.append('defs');
+    var sid = boxId + '-s', gid = boxId + '-g', pid = boxId + '-p', fid = boxId + '-f';
+    vgrad(defs, sid, [[0, P.silverHi], [1, P.silverDeep]]);
+    vgrad(defs, gid, [[0, P.goldHi], [0.5, P.gold], [1, P.goldDeep]]);
+    var pat = defs.append('pattern').attr('id', pid).attr('width', 8).attr('height', 8).attr('patternUnits', 'userSpaceOnUse').attr('patternTransform', 'rotate(45)');
+    pat.append('rect').attr('width', 8).attr('height', 8).attr('fill', 'rgba(210,188,133,0.10)');
+    pat.append('rect').attr('width', 3).attr('height', 8).attr('fill', 'rgba(210,188,133,0.55)');
+    if (!reduce) pat.append('animateTransform').attr('attributeName', 'patternTransform').attr('type', 'translate').attr('additive', 'sum').attr('from', '0 0').attr('to', '8 0').attr('dur', '1.1s').attr('repeatCount', 'indefinite');
+    glow(defs, fid, 6);
+
+    ticks.forEach(function (t) {
+      svg.append('line').attr('x1', left).attr('x2', W - 4).attr('y1', y(t)).attr('y2', y(t)).attr('stroke', t === 0 ? P.axis : P.grid);
+      svg.append('text').attr('x', left - 8).attr('y', y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').attr('fill', P.muted).style('font-size', '12px').text(fmtShort(t));
+    });
+
+    var bw = Math.min(x.bandwidth(), 46), anim = first && !reduce;
+    var groups = {};
+    months.forEach(function (r, i) {
+      var x0 = x(r.month) + (x.bandwidth() - bw) / 2, cxm = x0 + bw / 2;
+      var v = r[vKey], p = r[pKey], g = r[gKey], isCur = r.status === 'Current';
+      var showPace = isCur && p != null && p > (v || 0);
+      var G = svg.append('g').attr('class', 'bar-g');
+      groups[r.month] = G;
+      if (showPace) {
+        var ghost = G.append('rect').attr('x', x0).attr('width', bw).attr('rx', 6)
+          .attr('fill', 'url(#' + pid + ')').attr('stroke', P.gold).attr('stroke-width', 1.5).attr('stroke-dasharray', '5 3');
+        if (anim) ghost.attr('y', y(v || 0)).attr('height', y(0) - y(v || 0)).transition().delay(900).duration(900).ease(d3.easeCubicOut).attr('y', y(p)).attr('height', y(0) - y(p));
+        else ghost.attr('y', y(p)).attr('height', y(0) - y(p));
+      }
+      if (v != null && v !== 0) {
+        var yv = v > 0 ? y(v) : y(0), hv = Math.abs(y(v) - y(0));
+        var b = G.append('rect').attr('x', x0).attr('width', bw).attr('rx', 6)
+          .attr('fill', v < 0 ? P.neg : isCur ? 'url(#' + gid + ')' : 'url(#' + sid + ')')
+          .attr('filter', isCur ? 'url(#' + fid + ')' : null);
+        if (anim) b.attr('y', y(0)).attr('height', 0).transition().delay(i * 90).duration(1000).ease(d3.easeCubicOut).attr('y', yv).attr('height', hv);
+        else b.attr('y', yv).attr('height', hv);
+      }
+      if (g != null) {
+        var gl = G.append('line').attr('y1', y(g)).attr('y2', y(g)).attr('stroke', P.goal).attr('stroke-width', 3).attr('stroke-linecap', 'round');
+        var gt = G.append('text').attr('x', cxm).attr('y', y(g) - 8).attr('text-anchor', 'middle').attr('fill', P.goal).style('font-size', '11.5px').style('font-weight', 700).style('letter-spacing', '0.04em').text('GOAL ' + fmtShort(g));
+        if (anim) {
+          gl.attr('x1', x0 - 6).attr('x2', x0 - 6).transition().delay(1300 + i * 80).duration(600).ease(d3.easeCubicOut).attr('x2', x0 + bw + 6);
+          gt.attr('opacity', 0).transition().delay(1700 + i * 80).duration(400).attr('opacity', 1);
+        } else gl.attr('x1', x0 - 6).attr('x2', x0 + bw + 6);
+      }
+      var labels = [];
+      if (bw >= 22) {
+        if (showPace) {
+          labels.push(G.append('text').attr('x', cxm).attr('y', y(p) - 25).attr('text-anchor', 'middle').attr('fill', P.gold)
+            .style('font-size', '10.5px').style('font-weight', 800).style('letter-spacing', '0.08em').text('TRACKING'));
+          labels.push(G.append('text').attr('x', cxm).attr('y', y(p) - 9).attr('text-anchor', 'middle').attr('fill', P.goldHi)
+            .style('font-family', DISPLAY).style('font-size', '17px').style('font-weight', 700).text(fmtShort(p)));
+          if (v != null && y(0) - y(v) > 22 && fmtShort(v).length * 8.5 < bw) {
+            labels.push(G.append('text').attr('x', cxm).attr('y', y(v) + 17).attr('text-anchor', 'middle').attr('fill', P.ink)
+              .style('font-family', DISPLAY).style('font-size', '15px').style('font-weight', 700).text(fmtShort(v)));
+          }
+        } else if (v != null && g == null) {
+          labels.push(G.append('text').attr('x', cxm).attr('y', y(Math.max(v, 0)) - 8).attr('text-anchor', 'middle').attr('fill', P.fg)
+            .style('font-family', DISPLAY).style('font-size', '15px').style('font-weight', 600).text(fmtShort(v)));
+        } else if (v != null && y(0) - y(v) > 22 && fmtShort(v).length * 8.5 < bw) {
+          labels.push(G.append('text').attr('x', cxm).attr('y', y(v) + 17).attr('text-anchor', 'middle').attr('fill', P.ink)
+            .style('font-family', DISPLAY).style('font-size', '15px').style('font-weight', 700).text(fmtShort(v)));
+        }
+      }
+      if (anim) labels.forEach(function (l) { l.attr('opacity', 0).transition().delay(900 + i * 90).duration(500).attr('opacity', 1); });
+      svg.append('text').attr('x', x(r.month) + x.bandwidth() / 2).attr('y', H - 9).attr('text-anchor', 'middle')
+        .attr('fill', isCur ? P.gold : P.muted).style('font-size', '12px').style('font-weight', isCur ? 800 : 500).text(title(r.month));
+    });
+
+    var tip = tipFor(box);
+    months.forEach(function (r, i) {
+      var prevM = months[i - 1];
+      svg.append('rect').attr('x', x(r.month)).attr('width', x.bandwidth()).attr('y', top - 24).attr('height', H - bottom - top + 24).attr('fill', 'transparent')
+        .on('mousemove', function (e) {
+          box.classList.add('hovering');
+          Object.keys(groups).forEach(function (k) { groups[k].classed('on', k === r.month); });
+          var change = null;
+          var mine = r.status === 'Current' ? r[pKey] : r[vKey];
+          if (prevM && prevM[vKey] != null && mine != null) {
+            var dlt = mine - prevM[vKey];
+            change = (dlt >= 0 ? '▲ ' : '▼ ') + fmt(Math.abs(dlt)) + ' vs ' + FULL[prevM.m - 1].slice(0, 3);
+          }
+          tip.show(e, FULL[r.m - 1] + (r.status === 'Current' ? ' · in progress' : r.status === 'Ahead' ? ' · ahead' : ''), [
+            ['a', 'Delivered', r[vKey] == null ? null : fmt(r[vKey])],
+            ['p', 'Tracking', r.status === 'Current' && r[pKey] != null ? fmt(r[pKey]) : null],
+            ['g', 'Goal', r[gKey] == null ? null : fmt(r[gKey])],
+            ['c', 'Change', change]
+          ]);
+        })
+        .on('mouseleave', function () { box.classList.remove('hovering'); tip.hide(); });
+    });
+  }
+
+  // ---------- Running total ----------
+  function running(D) {
+    var box = el('c-run');
+    box.innerHTML = '';
+    var run = D.run;
+    if (!run.length) return;
+    var W = Math.max(280, box.clientWidth), H = 290, top = 24, bottom = 30, right = 78;
+    var lastPt = run[run.length - 1];
+    var endVal = D.ytd.pace_deals || lastPt.total;
+    var y = d3.scaleLinear().domain([0, Math.max(endVal, lastPt.total) * 1.08]).nice(5).range([H - bottom, top]);
+    var svg = d3.select(box).append('svg').attr('viewBox', '0 0 ' + W + ' ' + H);
+    var probe = svg.append('text').style('font-size', '12px');
+    var left = 0; y.ticks(5).forEach(function (t) { probe.text(fInt(t)); left = Math.max(left, probe.node().getComputedTextLength()); });
+    probe.remove(); left = Math.ceil(left) + 12;
+    var x = d3.scaleTime().domain([run[0].date, D.ytd.end]).range([left, W - right]);
+
+    y.ticks(5).forEach(function (t) {
+      svg.append('line').attr('x1', left).attr('x2', W - right).attr('y1', y(t)).attr('y2', y(t)).attr('stroke', t === 0 ? P.axis : P.grid);
+      svg.append('text').attr('x', left - 8).attr('y', y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').attr('fill', P.muted).style('font-size', '12px').text(fInt(t));
+    });
+    var every = W < 520 ? 2 : 1;
+    d3.timeMonth.range(run[0].date, d3.timeDay.offset(D.ytd.end, 1)).forEach(function (d, ti) {
+      svg.append('line').attr('x1', x(d)).attr('x2', x(d)).attr('y1', top).attr('y2', H - bottom).attr('stroke', P.grid);
+      if (ti % every) return;
+      svg.append('text').attr('x', x(d) + 3).attr('y', H - 9).attr('text-anchor', 'start').attr('fill', P.muted).style('font-size', '12px').text(d3.timeFormat('%b')(d));
+    });
+
+    var defs = svg.append('defs');
+    vgrad(defs, 'run-a', [[0, P.gold, 0.3], [0.45, P.gold, 0.12], [1, P.gold, 0]]);
+    glow(defs, 'run-f', 3);
+    var area = svg.append('path').datum(run).attr('fill', 'url(#run-a)')
+      .attr('d', d3.area().x(function (d) { return x(d.date); }).y0(y(0)).y1(function (d) { return y(d.total); }).curve(d3.curveStepAfter));
+    var line = svg.append('path').datum(run).attr('fill', 'none').attr('stroke', P.gold).attr('stroke-width', 2.5).attr('stroke-linejoin', 'round').attr('filter', 'url(#run-f)')
+      .attr('d', d3.line().x(function (d) { return x(d.date); }).y(function (d) { return y(d.total); }).curve(d3.curveStepAfter));
+
+    // month-end totals for finished months
+    var mpts = [];
+    D.months.filter(function (m) { return m.status === 'Final'; }).forEach(function (m) {
+      var endD = new Date(D.year, m.m, 0);
+      var pt = run.filter(function (r) { return r.date <= endD; }).pop();
+      if (!pt) return;
+      mpts.push(svg.append('circle').attr('cx', x(pt.date)).attr('cy', y(pt.total)).attr('r', 3.5).attr('fill', P.silver));
+      if (W >= 520 && Math.abs(x(lastPt.date) - x(pt.date)) > 110) mpts.push(svg.append('text').attr('x', x(pt.date) - 4).attr('y', y(pt.total) - 9).attr('text-anchor', 'end').attr('fill', P.muted).style('font-size', '11px').style('font-weight', 700).text(fInt(pt.total)));
+    });
+
+    var proj = svg.append('line').attr('x1', x(lastPt.date)).attr('y1', y(lastPt.total)).attr('x2', x(D.ytd.end)).attr('y2', y(endVal))
+      .attr('stroke', P.goldHi).attr('stroke-width', 2).attr('stroke-dasharray', '6 5').attr('class', 'march');
+    var dot = svg.append('circle').attr('cx', x(lastPt.date)).attr('cy', y(lastPt.total)).attr('r', 6).attr('fill', P.goldHi).attr('filter', 'url(#run-f)');
+    var endDot = svg.append('circle').attr('cx', x(D.ytd.end)).attr('cy', y(endVal)).attr('r', 6).attr('fill', P.ink).attr('stroke', P.goldHi).attr('stroke-width', 2);
+    var endLab = svg.append('text').attr('x', x(D.ytd.end) + 10).attr('y', y(endVal) - 2).attr('fill', P.goldHi).style('font-family', DISPLAY).style('font-size', '22px').style('font-weight', 700).text(fInt(endVal));
+    var endSub = svg.append('text').attr('x', x(D.ytd.end) + 10).attr('y', y(endVal) + 14).attr('fill', P.muted).style('font-size', '10.5px').style('font-weight', 700).text('YEAR END');
+    var nowLab = svg.append('text').attr('x', x(lastPt.date) - 10).attr('y', y(lastPt.total) - 14).attr('text-anchor', 'end').attr('fill', P.fg)
+      .style('font-family', DISPLAY).style('font-size', '19px').style('font-weight', 700).text(fInt(lastPt.total) + ' SO FAR');
+
+    if (first && !reduce) {
+      var L = line.node().getTotalLength();
+      line.attr('stroke-dasharray', L + ' ' + L).attr('stroke-dashoffset', L).transition().delay(500).duration(2200).ease(d3.easeCubicInOut).attr('stroke-dashoffset', 0)
+        .on('end', function () { line.attr('stroke-dasharray', null); });
+      area.attr('opacity', 0).transition().delay(1400).duration(1200).attr('opacity', 1);
+      mpts.forEach(function (s, i) { s.attr('opacity', 0).transition().delay(800 + Math.floor(i / 2) * 330).duration(400).attr('opacity', 1); });
+      [proj, dot, endDot, endLab, endSub, nowLab].forEach(function (s, i) { s.attr('opacity', 0).transition().delay(2600 + i * 80).duration(600).attr('opacity', 1); });
+    }
+
+    var tip = tipFor(box);
+    var bis = d3.bisector(function (d) { return d.date; }).left;
+    var hl = svg.append('line').attr('y1', top).attr('y2', H - bottom).attr('stroke', 'rgba(242,242,240,0.35)').attr('opacity', 0);
+    var hd = svg.append('circle').attr('r', 4.5).attr('fill', P.goldHi).attr('opacity', 0);
+    svg.append('rect').attr('x', left).attr('y', top).attr('width', Math.max(0, x(lastPt.date) - left)).attr('height', H - bottom - top).attr('fill', 'transparent')
+      .on('mousemove', function (e) {
+        var i = Math.max(0, Math.min(run.length - 1, bis(run, x.invert(d3.pointer(e)[0]))));
+        var d = run[i];
+        hl.attr('x1', x(d.date)).attr('x2', x(d.date)).attr('opacity', 1);
+        hd.attr('cx', x(d.date)).attr('cy', y(d.total)).attr('opacity', 1);
+        tip.show(e, d3.timeFormat('%b %-d')(d.date), [['l', 'Deals so far', fInt(d.total)]]);
+      })
+      .on('mouseleave', function () { hl.attr('opacity', 0); hd.attr('opacity', 0); tip.hide(); });
+  }
+
+  // ---------- Sources + leaderboard ----------
+  function setWidths(pairs) {
+    if (first && !reduce) requestAnimationFrame(function () { requestAnimationFrame(function () { pairs.forEach(function (p) { p[0].style.width = p[1] + '%'; }); }); });
+    else pairs.forEach(function (p) { p[0].style.transition = 'none'; p[0].style.width = p[1] + '%'; });
+  }
+  function sources(D) {
+    var box = el('sources'); box.innerHTML = '';
+    var max = d3.max(D.sources, function (s) { return s.deals; }) || 1;
+    var pairs = [];
+    D.sources.forEach(function (s, i) {
+      var row = document.createElement('div'); row.className = 'hbar' + (s.source === 'ADVISOR REF' ? ' adv' : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.5 + i * 0.05) + 's';
+      var lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = pretty(s.source);
+      var bar = document.createElement('div'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
+      var val = document.createElement('div'); val.className = 'val num';
+      var b = document.createElement('b'); val.appendChild(b);
+      var gs = document.createElement('span'); val.appendChild(document.createTextNode('  ')); val.appendChild(gs);
+      row.appendChild(lab); row.appendChild(bar); row.appendChild(val); box.appendChild(row);
+      setNum(b, 'sd-' + s.source, s.deals, fInt, 1200);
+      setNum(gs, 'sg-' + s.source, s.gross, money, 1400);
+      pairs.push([fill, s.deals / max * 100]);
+    });
+    setWidths(pairs);
+    var adv = D.sources.filter(function (s) { return s.source === 'ADVISOR REF'; })[0];
+    setNum(el('adv-avg'), 'advavg', adv ? adv.avg : null, money);
+  }
+  function board(D) {
+    var box = el('board'); box.innerHTML = '';
+    var max = d3.max(D.advisors, function (a) { return a.customers; }) || 1;
+    var pairs = [], rank = 0, prevC = null;
+    D.advisors.forEach(function (a, i) {
+      if (a.customers !== prevC) { rank = i + 1; prevC = a.customers; }
+      var row = document.createElement('div'); row.className = 'row' + (rank <= 3 ? ' top' + rank : '') + (first ? ' rise' : ''); row.style.animationDelay = (0.55 + i * 0.06) + 's';
+      var r = document.createElement('div'); r.className = 'rank'; r.textContent = rank;
+      var n = document.createElement('div'); n.className = 'nm'; n.textContent = title(a.advisor);
+      var bar = document.createElement('div'); bar.className = 'bar'; var fill = document.createElement('i'); bar.appendChild(fill);
+      var c = document.createElement('div'); c.className = 'ct num'; c.textContent = a.customers;
+      row.appendChild(r); row.appendChild(n); row.appendChild(bar); row.appendChild(c); box.appendChild(row);
+      pairs.push([fill, a.customers / max * 100]);
+    });
+    setWidths(pairs);
+  }
+
+  // ---------- Table ----------
+  function table(D) {
+    var tb = el('tbody'); tb.innerHTML = '';
+    D.months.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      tr.className = (r.status === 'Current' ? 'cur' : r.status === 'Ahead' ? 'ahead' : '') + (first ? ' rise' : '');
+      tr.style.animationDelay = (0.6 + i * 0.05) + 's';
+      var cells = [FULL[r.m - 1], null, intOr(r.deals), intOr(r.pace_deals), intOr(r.goal_deals), r.gross == null ? '—' : money(r.gross), r.pace_gross == null ? '—' : money(r.pace_gross), money(r.avg), intOr(r.refs)];
+      cells.forEach(function (c, j) {
+        var td = document.createElement('td'); td.className = 'num';
+        if (j === 1) { var p = document.createElement('span'); p.className = 'pill' + (r.status === 'Current' ? ' cur' : ''); p.textContent = r.status === 'Current' ? 'IN PROGRESS' : r.status.toUpperCase(); td.appendChild(p); }
+        else td.textContent = c;
+        if ((j === 5 && r.gross < 0) || (j === 7 && r.avg < 0)) td.classList.add('neg');
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+
+  // ---------- KPI strip ----------
+  function cumulative(months, f) { var acc = 0; return months.map(function (m) { if (m[f] == null) return null; acc += m[f]; return acc; }); }
+  function delta(node, now, before, fmt, label) {
+    node.className = 'k-delta';
+    if (now == null || before == null) { node.textContent = ''; return; }
+    var d = now - before;
+    node.classList.add(d >= 0 ? 'up' : 'down');
+    node.textContent = (d >= 0 ? '▲ ' : '▼ ') + fmt(Math.abs(d)) + ' ' + label;
+  }
+  function kpis(D) {
+    var box = el('kpis'), c = D.cur, pv = D.prev, months = D.months;
+    var pvName = pv ? FULL[pv.m - 1].slice(0, 3) : '';
+    var items = [
+      { k: 'md', label: 'Deals', scope: FULL[c.m - 1], v: c.deals, fmt: fInt, s: months.map(function (m) { return m.deals; }), d: [c.pace_deals, pv && pv.deals, fInt, 'tracking vs ' + pvName] },
+      { k: 'mg', label: 'Total gross', scope: FULL[c.m - 1], v: c.gross, fmt: money, s: months.map(function (m) { return m.gross; }), d: [c.pace_gross, pv && pv.gross, moneyShort, 'tracking vs ' + pvName] },
+      { k: 'ma', label: 'Avg / deal', scope: FULL[c.m - 1], v: c.avg, fmt: money, s: months.map(function (m) { return m.avg; }), d: [c.avg, pv && pv.avg, money, 'vs ' + pvName] },
+      { k: 'yd', label: 'Deals', scope: 'Year to date', v: D.ytd.deals, fmt: fInt, s: cumulative(months, 'deals'), note: 'Tracking ' + intOr(D.ytd.pace_deals) + ' for the year' },
+      { k: 'yg', label: 'Total gross', scope: 'Year to date', v: D.ytd.gross, fmt: money, s: cumulative(months, 'gross'), note: 'Tracking ' + moneyShort(D.ytd.pace_gross) },
+      { k: 'yr', label: 'Referrals', scope: 'Year to date', v: D.ytd.refs, fmt: fInt, s: cumulative(months, 'refs'), note: (D.ytd.deals ? d3.format('.0%')(D.ytd.refs / D.ytd.deals) : '—') + ' of all deals' }
+    ];
+    if (!box.children.length) {
+      items.forEach(function (it, i) {
+        var a = document.createElement('article'); a.className = 'card kpi rise'; a.style.animationDelay = (0.2 + i * 0.05) + 's';
+        a.innerHTML = '<div class="k-label"></div><div class="k-scope"></div><div class="k-value num"></div><div class="k-delta"></div><div class="k-spark"></div>';
+        box.appendChild(a);
+      });
+    }
+    items.forEach(function (it, i) {
+      var a = box.children[i];
+      a.querySelector('.k-label').textContent = it.label;
+      a.querySelector('.k-scope').textContent = it.scope;
+      setNum(a.querySelector('.k-value'), it.k, it.v, it.fmt, 1500);
+      var dn = a.querySelector('.k-delta');
+      if (it.d) delta(dn, it.d[0], it.d[1], it.d[2], it.d[3]);
+      else { dn.className = 'k-delta'; dn.textContent = it.note; }
+      spark(a.querySelector('.k-spark'), it.s, i < 3 ? P.silver : P.gold);
+    });
+  }
+
+  // ---------- Render ----------
+  function subLine(id, bold, rest) {
+    var n = el(id); n.innerHTML = '';
+    var b = document.createElement('b'); b.textContent = bold; n.appendChild(b);
+    n.appendChild(document.createTextNode(rest));
+  }
+  function fitMonth() {
+    var n = el('month-name');
+    var avail = n.parentNode.clientWidth;
+    n.style.fontSize = '80px';
+    var size = Math.max(36, Math.min(80, Math.floor(80 * avail / Math.max(1, n.scrollWidth))));
+    n.style.fontSize = size + 'px';
+  }
+  function render(raw) {
+    var D = compute(raw);
+    last = D;
+    var c = D.cur, pv = D.prev;
+    el('yr').textContent = D.year;
+    el('updated').textContent = 'Live · updated ' + raw.updated;
+    el('month-name').textContent = FULL[c.m - 1].toUpperCase();
+    fitMonth();
+
+    var take = el('take'); take.innerHTML = '';
+    var add = function (t, b) { if (b) { var e = document.createElement('b'); e.textContent = t; take.appendChild(e); } else take.appendChild(document.createTextNode(t)); };
+    add('Tracking '); add(intOr(c.pace_deals), true); add(' deals and '); add(money(c.pace_gross), true);
+    add(' this month with '); add(String(c.left), true); add(c.left === 1 ? ' day left. The year is tracking ' : ' days left. The year is tracking ');
+    add(intOr(D.ytd.pace_deals), true); add(' deals and '); add(money(D.ytd.pace_gross), true); add('.');
+
+    // status chip: against the goal if there is one, otherwise against last month
+    var chip = el('chip');
+    var target = c.goal_deals != null ? c.goal_deals : pv ? pv.deals : null;
+    var targetName = c.goal_deals != null ? 'goal' : pv ? FULL[pv.m - 1] : '';
+    if (c.status === 'Current' && target != null && c.pace_deals != null) {
+      var diff = Math.round(c.pace_deals) - Math.round(target);
+      chip.hidden = false;
+      chip.className = 'chip ' + (diff >= 0 ? 'up' : 'down');
+      chip.textContent = diff === 0 ? 'On pace to match ' + targetName : (diff > 0 ? '▲ ' : '▼ ') + 'Tracking ' + Math.abs(diff) + ' deal' + (Math.abs(diff) === 1 ? '' : 's') + (diff > 0 ? ' ahead of ' : ' behind ') + targetName;
+      if (c.left > 0 && diff < 0) chip.textContent += ' · need ' + Math.max(0, Math.ceil(target - c.deals)) + ' in ' + c.left + ' days';
+    } else chip.hidden = true;
+
+    el('m-days').textContent = 'Day ' + c.elapsed + ' of ' + c.days + ' · ' + c.left + ' left';
+    el('y-days').textContent = 'Day ' + D.ytd.elapsed + ' of ' + D.ytd.days + ' · ' + D.ytd.left + ' left';
+    var setRail = function () {
+      el('m-rail').style.width = (c.elapsed / c.days * 100) + '%';
+      el('y-rail').style.width = (D.ytd.elapsed / D.ytd.days * 100) + '%';
+    };
+    if (first && !reduce) setTimeout(setRail, 300); else setRail();
+
+    gauge('g-deals', { value: c.pace_deals, actual: c.deals, goal: c.goal_deals, best: D.best, fmt: fInt, fmtShort: fInt });
+    gauge('g-gross', { value: c.pace_gross, actual: c.gross, goal: c.goal_gross, best: D.bestGross, fmt: money, fmtShort: moneyShort });
+    gauge('g-year', { value: D.ytd.pace_deals, actual: D.ytd.deals, goal: null, best: null, fmt: fInt, fmtShort: fInt });
+    subLine('g-deals-sub', intOr(c.deals), ' delivered' + (c.goal_deals != null ? ' · goal ' + intOr(c.goal_deals) : ' · best month ' + intOr(D.best)));
+    subLine('g-gross-sub', money(c.gross), ' so far' + (c.goal_gross != null ? ' · goal ' + moneyShort(c.goal_gross) : ' · best ' + moneyShort(D.bestGross)));
+    subLine('g-year-sub', intOr(D.ytd.deals), ' delivered · ' + D.ytd.left + ' days left');
+
+    kpis(D);
+    drawCharts();
+    sources(D);
+    board(D);
+    table(D);
+    first = false;
+  }
+  function drawCharts() {
+    if (!last) return;
+    fitMonth();
+    bars('c-deals', last.months, 'deals', 'pace_deals', 'goal_deals', fInt, fInt);
+    bars('c-gross', last.months, 'gross', 'pace_gross', 'goal_gross', money, moneyShort);
+    running(last);
+  }
+
+  // ---------- Loading ----------
+  function onError(e) {
+    var box = el('err');
+    box.style.display = 'block';
+    box.textContent = 'The sheet could not be read: ' + (e && e.message ? e.message : e) + '. The page will try again at the next refresh.';
+    el('refresh').classList.remove('spin');
+  }
+  // Where the numbers come from. On its own page, the dashboard reads the sheet's data feed
+  // (the Apps Script web app link with ?data=1). No Google sign-in is involved.
+  var DATA_URL = window.__DATA_URL__ || 'https://script.google.com/macros/s/AKfycbxWKmy6De7DHqKt6o3Zs-3YpOuX-FOOKtEUWYfPz1Hj9-YXpBO959rtoUfVovUDpptF/exec';
+  function viaFetch() {
+    return fetch(DATA_URL + '?data=1&t=' + Date.now(), { credentials: 'omit', redirect: 'follow', cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('The data feed answered ' + r.status); return r.json(); });
+  }
+  function viaScriptTag() {
+    return new Promise(function (resolve, reject) {
+      var cb = 'sdsData' + Date.now();
+      var s = document.createElement('script');
+      var timer = setTimeout(function () { cleanup(); reject(new Error('The data feed took too long to answer')); }, 25000);
+      function cleanup() { clearTimeout(timer); try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); }
+      window[cb] = function (d) { cleanup(); resolve(d); };
+      s.onerror = function () { cleanup(); reject(new Error('The data feed could not be reached')); };
+      s.src = DATA_URL + '?data=1&prefix=' + cb + '&t=' + Date.now();
+      document.head.appendChild(s);
+    });
+  }
+  function load() {
+    el('refresh').classList.add('spin');
+    var done = function (raw) { el('err').style.display = 'none'; el('refresh').classList.remove('spin'); secondsLeft = REFRESH_SECONDS; render(raw); };
+    if (window.__MOCK__) { setTimeout(function () { done(window.__MOCK__); }, 150); return; }
+    if (window.google && google.script && google.script.run) {
+      google.script.run.withSuccessHandler(done).withFailureHandler(onError).getDashboardData();
+      return;
+    }
+    viaFetch().catch(function () { return viaScriptTag(); }).then(done, onError);
+  }
+  el('refresh').addEventListener('click', load);
+  setInterval(function () {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) { secondsLeft = REFRESH_SECONDS; load(); }
+    var m = Math.floor(secondsLeft / 60), s = secondsLeft % 60;
+    el('countdown').textContent = m + ':' + String(s).padStart(2, '0');
+  }, 1000);
+  var rt;
+  window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(drawCharts, 200); });
+  load();
+})();
+</script>
+</body>
+</html>
